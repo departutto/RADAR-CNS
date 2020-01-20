@@ -1,6 +1,6 @@
 """
 Created on: January 17, 2020.
-Last modified on: January 19, 2020.
+Last modified on: January 20, 2020.
 Copyright by Dzmitry A. Kaliukhovich.
 E-mail: <first name>.<last name> AT gmail.com
 
@@ -117,103 +117,153 @@ class Questionnaire:
                 logging.info('Failed to retrieve file specifications for participant {:s} in study {:s}.' . format(participant, study))
         
     
+    def __extract_data(self, participant, file_name, file_size, last_modified):
+        
+        data_table, table_fields = pandas.DataFrame(), set()
+        
+        try:
+            query = "SELECT * FROM {:s} WHERE participant_name = '{:s}' AND file_name = '{:s}' AND file_size = {:d} AND file_modified_on = {:d}"
+            query = query.format(self.table_name, participant, file_name, file_size, last_modified)
+            self.db_cursor.execute(query)                
+            if self.db_cursor.rowcount == 0:
+                self.ftp_conn.get(file_name, self.tmp_file)
+        except:
+            logging.info('Failed to download data file {:s} from the FTP server.' . format(file_name))
+
+        try:
+            compression = 'gzip' if file_name.endswith('.gz') else None
+            data_table = pandas.read_csv(self.tmp_file, compression = compression)
+            table_fields = set(data_table.columns)    
+        except:
+            logging.info('Failed to extract data from file {:s}.' . format(file_name))
+        
+        if os.path.isfile(self.tmp_file):
+            os.remove(self.tmp_file)
+        
+        return data_table, table_fields
+    
+    
+    def __transform_data_structure(self, data_table, file_name):
+        
+        data_records = []
+
+        try:        
+            data_records = data_table.to_dict(orient = 'records')  
+        except:
+            logging.info('Failed to convert data in file {:s} to an iterable.' . format(file_name))
+            
+        return data_records
+
+
+    def __is_record_valid(self, single_record, file_name):
+        
+        valid = False
+        
+        try:
+            valid = all([self.constraints[key](single_record[key]) for key in self.constraints])
+        except:
+            logging.info('At least, one data record in file {:s} does not meet constraints.' . format(file_name))
+        
+        return valid   
+    
+    
+    def __get_local_time(self, raw_timestamp, timezone, file_name):
+        
+        str_timestamp = ''
+        
+        try:
+            utc_timestamp = dt.fromtimestamp(round(raw_timestamp), tz.gettz('UTC'))
+            loc_timestamp = utc_timestamp.astimezone(tz.gettz(timezone))
+            str_timestamp = loc_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            logging.info('Failed to convert timestamp {:f} in file {:s}.' . format(raw_timestamp, file_name))
+        
+        return str_timestamp
+
+
+    def __get_time_interval_id(self, str_timestamp, file_name):
+        
+        time_interval = None
+        
+        try:
+            query = "SELECT timeInterval_ID FROM timeIntervals WHERE datetimeStart <= '{:s}' AND '{:s}' <= datetimeEnd"
+            query = query.format(str_timestamp, str_timestamp)
+            self.db_cursor.execute(query)
+            if self.db_cursor.rowcount == 1:
+                time_interval = self.db_cursor.fetchone()[0]
+            else:
+                logging.info('No or multiple links to completion time {:s} in file {:s}.' . format(str_timestamp, file_name))
+        except:
+            logging.info('Failed to link completion time {:s} in file {:s}.' . format(str_timestamp, file_name))
+                        
+        return time_interval                   
+                        
+    
+    def __form_query(self, participant, site, file_name, file_size, last_modified, single_record):
+        
+        query_fields = 'participant_name, file_name, file_size, file_modified_on'
+        query_values = "'{:s}', '{:s}', {:d}, {:d}" . format(participant, file_name, file_size, last_modified)
+                    
+        for single_field in self.fields:
+            field_name, field_value = self.fields[single_field], single_record[single_field] 
+            query_fields += ', ' + field_name
+            if not isinstance(field_value, str):
+                field_value = str(field_value)
+            elif field_value != 'NULL':
+                field_value = "'" + field_value + "'"
+            query_values += ', ' + field_value   
+                    
+        raw_timestamp, timezone = single_record['value.timeCompleted'], self.timezones[site]
+        str_timestamp = self.__get_local_time(raw_timestamp, timezone, file_name)
+        if str_timestamp:
+            query_fields += ', ' + 'time_completed_local'
+            query_values += ", '" + str_timestamp + "'"
+                    
+        time_interval = self.__get_time_interval_id(str_timestamp, file_name)
+        if time_interval:
+            query_fields += ', ' + 'time_interval'
+            query_values += ', ' + str(time_interval)
+        
+        return query_fields, query_values
+    
+    
+    def __add_new_data(self, query_fields, query_values):
+        
+        try:
+            query = 'INSERT INTO {:s} ({:s}) VALUES ({:s})' . format(self.table_name, query_fields, query_values)
+            self.db_cursor.execute(query)
+            self.db_conn.commit()
+        except:
+            logging.info('Failed to execute SQL query {:s}.' . format(query))
+    
+    
     def update_db(self):
         
         required_fields = set(self.fields.keys())
         
-        for single_file in self.files:
-            
+        for single_file in self.files:    
+                      
             participant, site, file_name, file_size, last_modified = single_file
+            data_table, table_fields = self.__extract_data(participant, file_name, file_size, last_modified) 
             
-            try:
-                query = "SELECT * FROM {:s} WHERE participant_name = '{:s}' AND file_name = '{:s}' AND file_size = {:d} AND file_modified_on = {:d}"
-                query = query.format(self.table_name, participant, file_name, file_size, last_modified)
-                self.db_cursor.execute(query)                
-                if self.db_cursor.rowcount == 0:
-                    self.ftp_conn.get(file_name, self.tmp_file)
-                else:
-                    continue
-            except:
-                logging.info('Failed to download data file {:s} from the FTP server.' . format(file_name))
-
-            try:
-                compression = 'gzip' if file_name.endswith('.gz') else None
-                data_table = pandas.read_csv(self.tmp_file, compression = compression)
-                table_fields = set(data_table.columns)    
-            except:
-                table_fields = set()
-                logging.info('Failed to extract data from file {:s}.' . format(file_name))
-            
-            ###################################################################
-            
-            if table_fields and not required_fields.difference(table_fields.union(['value.timeNotification'])):
+            if table_fields and not required_fields.difference(table_fields.union(['value.timeNotification'])):                
                 
-                data_records = data_table.to_dict(orient = 'records')
+                data_records = self.__transform_data_structure(data_table, file_name)
                         
                 for single_record in data_records:
-                    
-                    query_fields = 'participant_name, file_name, file_size, file_modified_on'
-                    query_values = "'{:s}', '{:s}', {:d}, {:d}" . format(participant, file_name, file_size, last_modified)
-                    
-                    try:
-                        is_valid = all([self.constraints[key](single_record[key]) for key in self.constraints])
-                    except:
-                        is_valid = False
-                    if not is_valid:
-                        logging.info('At least, one data record in file {:s} does not meet constraints.' . format(file_name))
+                               
+                    if not self.__is_record_valid(single_record, file_name):
                         continue
                     
-                    if ('value.timeNotification' not in single_record or 
-                       ('value.timeNotification' in single_record and pandas.isna(single_record['value.timeNotification']))):
-                        single_record['value.timeNotification'] = 'NULL'
+                    if (('value.timeNotification' in single_record and pandas.isna(single_record['value.timeNotification'])) or
+                         'value.timeNotification' not in single_record):
+                        single_record['value.timeNotification'] = 'NULL'                    
                     
-                    for single_field in self.fields:
-                        field_name, field_value = self.fields[single_field], single_record[single_field] 
-                        query_fields += ', ' + field_name
-                        if not isinstance(field_value, str):
-                            field_value = str(field_value)
-                        elif field_value != 'NULL':
-                            field_value = "'" + field_value + "'"
-                        query_values += ', ' + field_value   
-                    
-                    try:
-                        raw_timestamp, timezone = single_record['value.timeCompleted'], self.timezones[site]
-                        utc_timestamp = dt.fromtimestamp(raw_timestamp, tz.gettz('UTC'))
-                        loc_timestamp = utc_timestamp.astimezone(tz.gettz(timezone))
-                        str_timestamp = loc_timestamp.strftime('%Y-%m-%d %H:%M:%S')
-                        query_fields += ', ' + 'time_completed_local'
-                        query_values += ", '" + str_timestamp + "'"
-                    except:
-                        str_timestamp = ''
-                        logging.info('Failed to convert timestamp {:f} in file {:s} at site {:d}.' . format(raw_timestamp, file_name, site))
-
-                    try:
-                        query = "SELECT timeInterval_ID FROM timeIntervals WHERE datetimeStart <= '{:s}' AND '{:s}' <= datetimeEnd"
-                        query = query . format(str_timestamp, str_timestamp)
-                        self.db_cursor.execute(query)
-                        if self.db_cursor.rowcount == 1:
-                            time_interval = self.db_cursor.fetchone()[0]
-                            query_fields += ', ' + 'time_interval'
-                            query_values += ', ' + str(time_interval)
-                        else:
-                            logging.info('No or multiple links to completion time {:s} in file {:s} at site {:d}.' . format(str_timestamp, file_name, site))
-                    except:
-                        logging.info('Failed to link completion time {:s} in file {:s} at site {:d}.' . format(str_timestamp, file_name, site))
-                    
-                    try:
-                        query = 'INSERT INTO {:s} ({:s}) VALUES ({:s})' . format(self.table_name, query_fields, query_values)
-                        self.db_cursor.execute(query)
-                        self.db_conn.commit()
-                    except:
-                        logging.info('Failed to execute SQL query {:s}.' . format(query))
-                
+                    query_fields, query_values = self.__form_query(participant, site, file_name, file_size, last_modified, single_record) 
+                    self.__add_new_data(query_fields, query_values)
+               
             else:
-                logging.info('Data file {:s} does not include all required fields.' . format(file_name))
-            
-            ###################################################################
-            
-            if os.path.isfile(self.tmp_file):
-                os.remove(self.tmp_file)
+                logging.info('Data file {:s} does not include all required fields.' . format(file_name))            
 
 
     def __del__(self):
