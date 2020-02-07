@@ -1,6 +1,6 @@
 """
 Created on: January 17, 2020.
-Last modified on: January 20, 2020.
+Last modified on: February 7, 2020.
 Copyright by Dzmitry A. Kaliukhovich.
 E-mail: <first name>.<last name> AT gmail.com
 
@@ -40,7 +40,7 @@ import pysftp
 class Questionnaire:
     
     
-    def __init__(self, ftp_server, mysql_server, service_dir, root_dir, studies, data_stream, fields, constraints, table_name, timezones):
+    def __init__(self, ftp_server, mysql_server, service_dir, root_dir, studies, data_stream, required_fields, optional_fields, constraints, table_name, timezones):
                   
         self.service_dir = service_dir
         self.tmp_file = os.path.join(self.service_dir, 'tmp_file.tmp')
@@ -48,7 +48,10 @@ class Questionnaire:
         self.root_dir = root_dir
         self.studies = [os.path.join(self.root_dir, el) for el in studies]   
         self.data_stream = data_stream
-        self.fields = fields
+        self.required_fields = required_fields
+        self.optional_fields = optional_fields
+        self.all_fields = self.required_fields.copy()
+        self.all_fields.update(optional_fields)
         self.constraints = constraints
         self.table_name = table_name
         self.timezones = timezones
@@ -204,8 +207,8 @@ class Questionnaire:
         query_fields = 'participant_name, file_name, file_size, file_modified_on'
         query_values = "'{:s}', '{:s}', {:d}, {:d}" . format(participant, file_name, file_size, last_modified)
                     
-        for single_field in self.fields:
-            field_name, field_value = self.fields[single_field], single_record[single_field] 
+        for single_field in self.all_fields:
+            field_name, field_value = self.all_fields[single_field], single_record[single_field] 
             query_fields += ', ' + field_name
             if not isinstance(field_value, str):
                 field_value = str(field_value)
@@ -239,7 +242,7 @@ class Questionnaire:
     
     def update_db(self):
         
-        required_fields = set(self.fields.keys())
+        required_fields = set(self.required_fields.keys())
         
         for single_file in self.files:    
                       

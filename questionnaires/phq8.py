@@ -1,6 +1,6 @@
 """
 Created on: January 17, 2020.
-Last modified on: January 19, 2020.
+Last modified on: February 7, 2020.
 Copyright by Dzmitry A. Kaliukhovich.
 E-mail: <first name>.<last name> AT gmail.com
 
@@ -27,6 +27,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+
 import questionnaire
 import params
 
@@ -34,26 +35,29 @@ import params
 DATA_STREAM = 'questionnaire_phq8'
 
 
-FIELDS = {'key.projectId'             : 'project_id',         'key.userId'             : 'user_id', 
-          'key.sourceId'              : 'source_id',          'value.time'             : 'time', 
-          'value.timeCompleted'       : 'time_completed_utc', 'value.timeNotification' : 'time_notification', 
-          'value.name'                : 'name',               'value.version'          : 'version', 
-          'value.answers.0.questionId': 'question_id0',       'value.answers.0.value'  : 'value0', 
-          'value.answers.0.startTime' : 'start_time0',        'value.answers.0.endTime': 'end_time0',
-          'value.answers.1.questionId': 'question_id1',       'value.answers.1.value'  : 'value1', 
-          'value.answers.1.startTime' : 'start_time1',        'value.answers.1.endTime': 'end_time1',
-          'value.answers.2.questionId': 'question_id2',       'value.answers.2.value'  : 'value2', 
-          'value.answers.2.startTime' : 'start_time2',        'value.answers.2.endTime': 'end_time2',
-          'value.answers.3.questionId': 'question_id3',       'value.answers.3.value'  : 'value3', 
-          'value.answers.3.startTime' : 'start_time3',        'value.answers.3.endTime': 'end_time3',
-          'value.answers.4.questionId': 'question_id4',       'value.answers.4.value'  : 'value4', 
-          'value.answers.4.startTime' : 'start_time4',        'value.answers.4.endTime': 'end_time4',
-          'value.answers.5.questionId': 'question_id5',       'value.answers.5.value'  : 'value5', 
-          'value.answers.5.startTime' : 'start_time5',        'value.answers.5.endTime': 'end_time5',
-          'value.answers.6.questionId': 'question_id6',       'value.answers.6.value'  : 'value6', 
-          'value.answers.6.startTime' : 'start_time6',        'value.answers.6.endTime': 'end_time6',
-          'value.answers.7.questionId': 'question_id7',       'value.answers.7.value'  : 'value7', 
-          'value.answers.7.startTime' : 'start_time7',        'value.answers.7.endTime': 'end_time7',}
+REQUIRED_FIELDS = {'key.projectId'             : 'project_id',         'key.userId'             : 'user_id', 
+                   'key.sourceId'              : 'source_id',          'value.time'             : 'time', 
+                   'value.timeCompleted'       : 'time_completed_utc', 'value.timeNotification' : 'time_notification', 
+                   'value.name'                : 'name',               'value.version'          : 'version', 
+                   'value.answers.0.questionId': 'question_id0',       'value.answers.0.value'  : 'value0', 
+                   'value.answers.0.startTime' : 'start_time0',        'value.answers.0.endTime': 'end_time0',
+                   'value.answers.1.questionId': 'question_id1',       'value.answers.1.value'  : 'value1', 
+                   'value.answers.1.startTime' : 'start_time1',        'value.answers.1.endTime': 'end_time1',
+                   'value.answers.2.questionId': 'question_id2',       'value.answers.2.value'  : 'value2', 
+                   'value.answers.2.startTime' : 'start_time2',        'value.answers.2.endTime': 'end_time2',
+                   'value.answers.3.questionId': 'question_id3',       'value.answers.3.value'  : 'value3', 
+                   'value.answers.3.startTime' : 'start_time3',        'value.answers.3.endTime': 'end_time3',
+                   'value.answers.4.questionId': 'question_id4',       'value.answers.4.value'  : 'value4', 
+                   'value.answers.4.startTime' : 'start_time4',        'value.answers.4.endTime': 'end_time4',
+                   'value.answers.5.questionId': 'question_id5',       'value.answers.5.value'  : 'value5', 
+                   'value.answers.5.startTime' : 'start_time5',        'value.answers.5.endTime': 'end_time5',
+                   'value.answers.6.questionId': 'question_id6',       'value.answers.6.value'  : 'value6', 
+                   'value.answers.6.startTime' : 'start_time6',        'value.answers.6.endTime': 'end_time6',
+                   'value.answers.7.questionId': 'question_id7',       'value.answers.7.value'  : 'value7', 
+                   'value.answers.7.startTime' : 'start_time7',        'value.answers.7.endTime': 'end_time7',}
+
+
+OPTIONAL_FIELDS = {}
 
 
 TABLE_NAME = 'phq8_data'
@@ -103,7 +107,8 @@ if __name__ == '__main__':
                                     params.ROOT_DIR, 
                                     params.STUDIES, 
                                     DATA_STREAM, 
-                                    FIELDS, 
+                                    REQUIRED_FIELDS,
+                                    OPTIONAL_FIELDS,
                                     CONSTRAINTS,
                                     TABLE_NAME,
                                     TIMEZONES)
